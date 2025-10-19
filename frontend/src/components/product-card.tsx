@@ -9,7 +9,7 @@ interface Product {
   id: string
   name: string
   description: string
-  price: number
+  price: string
   category: string
   style: string
   image: string
@@ -72,7 +72,7 @@ export function ProductCard({ product }: ProductCardProps) {
     {/* Price */}
     <div className="flex items-center justify-between pt-2 border-t border-border">
       <span className="font-bold text-lg text-primary">
-        ${product.price.toLocaleString()}
+        {product.price.toLocaleString()}
       </span>
     </div>
   </div>

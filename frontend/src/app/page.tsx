@@ -1,16 +1,16 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card } from "@/components/ui/card"
 import { Send, Loader2 } from "lucide-react"
 import { ChatMessage } from "@/components/chat-message"
 import { LoadingSkeleton } from "@/components/loading-skeletons"
 import { ProductCard } from "@/components/product-card"
 import { LandingHero } from "@/components/landing-hero"
+import Papa from "papaparse"
+import Fuse from "fuse.js"
 
 interface Message {
   id: string
@@ -24,10 +24,13 @@ interface Product {
   id: string
   name: string
   description: string
-  price: number
+  price: string
   category: string
-  style: string
-  image: string
+  style?: string
+  image?: string
+  color?: string
+  material?: string
+  brand?: string
 }
 
 export default function RecommendationPage() {
@@ -42,8 +45,39 @@ export default function RecommendationPage() {
   ])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [allProducts, setAllProducts] = useState<Product[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 🧩 Load CSV once
+  useEffect(() => {
+    fetch("/dataset_with_ids.csv")
+      .then((res) => res.text())
+      .then((csvText) => {
+        const parsed = Papa.parse(csvText, { header: true })
+        const data: Product[] = parsed.data.map((item: any, index: number) => ({
+          id: item.uniq_id || index.toString(),
+          name: item.title,
+          description: item.description,
+          price: item.price,
+          category: item.categories,
+          image: parseImage(item.images),
+          color: item.color,
+          material: item.material,
+          brand: item.brand,
+        }))
+        setAllProducts(data)
+      })
+  }, [])
+
+  const parseImage = (imgField: string) => {
+    try {
+      const arr = JSON.parse(imgField.replace(/'/g, '"'))
+      return arr[0]?.trim() || ""
+    } catch {
+      return ""
+    }
+  }
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value)
@@ -70,7 +104,6 @@ export default function RecommendationPage() {
       setHasStartedChat(true)
     }
 
-    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -81,51 +114,27 @@ export default function RecommendationPage() {
     setInput("")
     setIsLoading(true)
 
-    // Simulate AI response with products
     setTimeout(() => {
-      const mockProducts: Product[] = [
-        {
-          id: "1",
-          name: "Modern Minimalist Sofa",
-          description:
-            "A sleek, contemporary sofa with clean lines and premium fabric. Perfect for modern living spaces.",
-          price: 1299,
-          category: "Seating",
-          style: "Modern",
-          image: "/background1.jpg",
-        },
-        {
-          id: "2",
-          name: "Scandinavian Coffee Table",
-          description:
-            "Light wood coffee table with natural finish. Combines functionality with Nordic design aesthetics.",
-          price: 399,
-          category: "Tables",
-          style: "Scandinavian",
-          image: "/background5.jpg",
-        },
-        {
-          id: "3",
-          name: "Industrial Floor Lamp",
-          description: "Vintage-inspired floor lamp with metal frame and adjustable arm. Adds character to any room.",
-          price: 249,
-          category: "Lighting",
-          style: "Industrial",
-          image: "/background6.jpg",
-        },
-      ]
+      const fuse = new Fuse(allProducts, {
+        keys: ["name", "description", "category", "color", "material", "brand"],
+        threshold: 0.4,
+      })
+      const res = fuse.search(input)
+      const topResults = res.slice(0, 6).map((r) => r.item)
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content:
-          "Based on your preferences, I've found these perfect pieces for your space. Each item combines style with functionality and quality craftsmanship.",
-        products: mockProducts,
+          topResults.length > 0
+            ? "Based on your preferences, here are some items that might suit your taste and style:"
+            : "I couldn’t find an exact match, but try describing your preferences differently (e.g., 'modern black chair', 'doormat','tv tray', 'folding computer table').",
+        products: topResults,
       }
 
       setMessages((prev) => [...prev, assistantMessage])
       setIsLoading(false)
-    }, 1500)
+    }, 1200)
   }
 
   if (!hasStartedChat) {
@@ -136,7 +145,6 @@ export default function RecommendationPage() {
     <main className="h-full bg-gradient-to-br from-background via-background to-primary/5 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-4 py-8">
         <div className="flex flex-col h-[calc(100vh-130px)] gap-6 items-center w-auto">
-
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto space-y-4 pr-2">
             {messages.map((message) => (
@@ -155,24 +163,24 @@ export default function RecommendationPage() {
             <div ref={messagesEndRef} />
           </div>
 
-
+          {/* Input Card */}
           <Card className="p-2 rounded-3xl border-primary/20 bg-card/50 backdrop-blur max-w-5xl min-w-xl ">
-            <form onSubmit={handleSendMessage} className="flex gap-2" >
+            <form onSubmit={handleSendMessage} className="flex gap-2">
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={handleTextareaChange}
-                placeholder="Describe your space, style, and budget..."
+                placeholder="Tell me what you're looking for ..."
                 disabled={isLoading}
                 rows={3}
                 className="flex-1 bg-background/50 rounded-2xl px-2 py-4 border border-primary/30 focus:border-primary focus:outline-none transition-colors resize-none max-h-[200px] font-medium text-foreground placeholder:text-muted-foreground"
-                />
+              />
 
               <Button
                 type="submit"
                 disabled={isLoading || !input.trim()}
-                className="gap-2 rounded-full px-6 py-3  hover:shadow-lg hover:shadow-primary/50 transition-all duration-300"
-                >
+                className="gap-2 rounded-full px-6 py-3 hover:shadow-lg hover:shadow-primary/50 transition-all duration-300"
+              >
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </form>

@@ -1,358 +1,319 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { Card } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from "recharts"
-import { Search, TrendingUp, Package, DollarSign, Star } from "lucide-react"
+import { useState, useEffect } from "react"
+import Papa from "papaparse"
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Github } from "lucide-react"
+import DataTable from "@/components/data-table"
 
-interface FurnitureItem {
-  id: string
-  name: string
-  category: string
+interface Product {
+  title: string
+  brand: string
+  description: string
   price: number
-  stock: number
-  rating: number
-  reviews: number
-  sales: number
-  style: string
+  categories: string
+  images: string
+  manufacturer: string
+  package_dimensions: string
+  country_of_origin: string
+  material: string
+  color: string
+  uniq_id: string
 }
 
-// Mock furniture database
-const FURNITURE_DATABASE: FurnitureItem[] = [
-  {
-    id: "1",
-    name: "Modern Minimalist Sofa",
-    category: "Seating",
-    price: 1299,
-    stock: 15,
-    rating: 4.8,
-    reviews: 234,
-    sales: 156,
-    style: "Modern",
-  },
-  {
-    id: "2",
-    name: "Scandinavian Coffee Table",
-    category: "Tables",
-    price: 399,
-    stock: 32,
-    rating: 4.6,
-    reviews: 189,
-    sales: 298,
-    style: "Scandinavian",
-  },
-  {
-    id: "3",
-    name: "Industrial Floor Lamp",
-    category: "Lighting",
-    price: 249,
-    stock: 48,
-    rating: 4.7,
-    reviews: 156,
-    sales: 412,
-    style: "Industrial",
-  },
-  {
-    id: "4",
-    name: "Velvet Accent Chair",
-    category: "Seating",
-    price: 599,
-    stock: 22,
-    rating: 4.9,
-    reviews: 267,
-    sales: 189,
-    style: "Contemporary",
-  },
-  {
-    id: "5",
-    name: "Wooden Dining Table",
-    category: "Tables",
-    price: 899,
-    stock: 8,
-    rating: 4.5,
-    reviews: 145,
-    sales: 87,
-    style: "Rustic",
-  },
-  {
-    id: "6",
-    name: "Pendant Light Fixture",
-    category: "Lighting",
-    price: 179,
-    stock: 56,
-    rating: 4.4,
-    reviews: 98,
-    sales: 523,
-    style: "Modern",
-  },
-  {
-    id: "7",
-    name: "Leather Recliner",
-    category: "Seating",
-    price: 1499,
-    stock: 5,
-    rating: 4.9,
-    reviews: 312,
-    sales: 67,
-    style: "Contemporary",
-  },
-  {
-    id: "8",
-    name: "Glass Side Table",
-    category: "Tables",
-    price: 299,
-    stock: 41,
-    rating: 4.3,
-    reviews: 76,
-    sales: 234,
-    style: "Modern",
-  },
-]
-
 export default function AnalyticsPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [countryData, setCountryData] = useState<any[]>([])
+  const [brandData, setBrandData] = useState<any[]>([])
+  const [colorData, setColorData] = useState<any[]>([])
+  const [stats, setStats] = useState({
+    totalProducts: 0,
+  })
 
-  const filteredItems = useMemo(() => {
-    return FURNITURE_DATABASE.filter((item) => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory = !selectedCategory || item.category === selectedCategory
-      return matchesSearch && matchesCategory
-    })
-  }, [searchTerm, selectedCategory])
+  useEffect(() => {
+    const loadCSV = async () => {
+      try {
+        const response = await fetch("/dataset_with_ids.csv")
+        const csvText = await response.text()
 
-  const categories = Array.from(new Set(FURNITURE_DATABASE.map((item) => item.category)))
-
-  // Analytics data
-  const categoryStats = useMemo(() => {
-    const stats: Record<string, { category: string; count: number; revenue: number }> = {}
-    FURNITURE_DATABASE.forEach((item) => {
-      if (!stats[item.category]) {
-        stats[item.category] = { category: item.category, count: 0, revenue: 0 }
+        Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true,
+          complete: (results: any) => {
+            const data = results.data as Product[]
+            setProducts(data)
+            processData(data)
+            setLoading(false)
+          },
+          error: (error: any) => {
+            console.error("CSV parsing error:", error)
+            setLoading(false)
+          },
+        })
+      } catch (error) {
+        console.error("Error loading CSV:", error)
+        setLoading(false)
       }
-      stats[item.category].count += item.sales
-      stats[item.category].revenue += item.price * item.sales
-    })
-    return Object.values(stats)
+    }
+
+    loadCSV()
   }, [])
 
-  const priceDistribution = useMemo(() => {
-    const ranges = [
-      { range: "$0-500", count: 0 },
-      { range: "$500-1000", count: 0 },
-      { range: "$1000+", count: 0 },
-    ]
-    FURNITURE_DATABASE.forEach((item) => {
-      if (item.price < 500) ranges[0].count++
-      else if (item.price < 1000) ranges[1].count++
-      else ranges[2].count++
+  const processData = (data: Product[]) => {
+    setStats({
+      totalProducts: data.length,
     })
-    return ranges
-  }, [])
 
-  const totalRevenue = FURNITURE_DATABASE.reduce((sum, item) => sum + item.price * item.sales, 0)
-  const totalSales = FURNITURE_DATABASE.reduce((sum, item) => sum + item.sales, 0)
-  const avgRating = (
-    FURNITURE_DATABASE.reduce((sum, item) => sum + item.rating, 0) / FURNITURE_DATABASE.length
-  ).toFixed(1)
-  const totalItems = FURNITURE_DATABASE.length
+    const countryMap: Record<string, number> = {}
+    data.forEach((p) => {
+      const country = p.country_of_origin || "Unknown"
+      countryMap[country] = (countryMap[country] || 0) + 1
+    })
+    const countryArray = Object.entries(countryMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
 
-  const COLORS = ["#8b5cf6", "#06b6d4", "#f97316"]
+    const top5Countries = countryArray.slice(0, 5)
+    const othersCount = countryArray.slice(5).reduce((sum, item) => sum + item.value, 0)
+
+    if (othersCount > 0) {
+      top5Countries.push({ name: "Others", value: othersCount })
+    }
+    setCountryData(top5Countries)
+
+    // Brand distribution
+    const brandMap: Record<string, number> = {}
+    data.forEach((p) => {
+      const brand = p.brand || "Unknown"
+      brandMap[brand] = (brandMap[brand] || 0) + 1
+    })
+    const brandArray = Object.entries(brandMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8)
+    setBrandData(brandArray)
+
+    // Color distribution
+    const colorMap: Record<string, number> = {}
+    data.forEach((p) => {
+      const color = p.color || "Unknown"
+      colorMap[color] = (colorMap[color] || 0) + 1
+    })
+    const colorArray = Object.entries(colorMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8)
+    setColorData(colorArray)
+  }
+
+  const COLORS = [
+    "#FF6B6B", // Bright Red
+    "#4ECDC4", // Bright Teal
+    "#FFE66D", // Bright Yellow
+    "#95E1D3", // Bright Mint
+    "#FF8B94", // Bright Pink
+    "#A8E6CF", // Bright Green
+    "#FFD3B6", // Bright Orange
+    "#FFAAA5", // Bright Coral
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-foreground">Loading analytics data...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-2">Furniture Analytics</h1>
-          <p className="text-muted-foreground">
-            Real-time insights into your furniture inventory and sales performance
-          </p>
+    <main className="min-h-screen bg-background text-foreground">
+      {/* Header */}
+      <div className="border-b border-border bg-card">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-foreground">Product Analytics</h1>
+              <p className="text-muted-foreground mt-2">Comprehensive analysis of product dataset</p>
+            </div>
+            <a
+              href="https://github.com/Pranav07Duggal/Ikarus_3D/blob/main/notebooks/Ikarus_Data_Analysis.ipynb"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity"
+            >
+              <Github size={20} />
+              <span>View Python Analytics</span>
+            </a>
+          </div>
         </div>
+      </div>
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card className="p-6 border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-purple-500/5 backdrop-blur hover:border-purple-500/50 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Revenue</p>
-                <p className="text-2xl md:text-3xl font-bold text-purple-400 dark:text-purple-300">
-                  ${(totalRevenue / 1000).toFixed(1)}K
-                </p>
-              </div>
-              <DollarSign className="h-8 w-8 text-purple-400/50" />
-            </div>
-          </Card>
-
-          <Card className="p-6 border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 backdrop-blur hover:border-cyan-500/50 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Sales</p>
-                <p className="text-2xl md:text-3xl font-bold text-cyan-400 dark:text-cyan-300">
-                  {totalSales.toLocaleString()}
-                </p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-cyan-400/50" />
-            </div>
-          </Card>
-
-          <Card className="p-6 border-orange-500/30 bg-gradient-to-br from-orange-500/10 to-orange-500/5 backdrop-blur hover:border-orange-500/50 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Avg Rating</p>
-                <p className="text-2xl md:text-3xl font-bold text-orange-400 dark:text-orange-300">{avgRating}★</p>
-              </div>
-              <Star className="h-8 w-8 text-orange-400/50" />
-            </div>
-          </Card>
-
-          <Card className="p-6 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 backdrop-blur hover:border-emerald-500/50 transition-all duration-300">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">Total Items</p>
-                <p className="text-2xl md:text-3xl font-bold text-emerald-400 dark:text-emerald-300">{totalItems}</p>
-              </div>
-              <Package className="h-8 w-8 text-emerald-400/50" />
-            </div>
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 gap-4 mb-8">
+          <Card className="bg-card border-border">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Products</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-foreground">{stats.totalProducts.toLocaleString()}</div>
+            </CardContent>
           </Card>
         </div>
 
-        {/* Charts */}
+        {/* Charts Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <Card className="p-6 border-primary/10 bg-card/50 backdrop-blur">
-            <h2 className="text-lg font-semibold mb-4 text-foreground">Sales by Category</h2>
-            <ChartContainer
-              config={{
-                sales: { label: "Sales", color: "hsl(var(--primary))" },
-              }}
-              className="h-80"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categoryStats}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="category" stroke="var(--muted-foreground)" />
-                  <YAxis stroke="var(--muted-foreground)" />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="count" fill="#8b5cf6" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+          {/* Country Distribution */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Products by Country</CardTitle>
+              <CardDescription>Top 5 countries of origin (Others grouped)</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={{
+                  value: {
+                    label: "Products",
+                    color: "hsl(var(--chart-2))",
+                  },
+                }}
+                className="h-80"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={countryData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={100}
+                      fill="var(--color-chart-2)"
+                      dataKey="value"
+                    >
+                      {countryData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
           </Card>
 
-          <Card className="p-6 border-primary/10 bg-card/50 backdrop-blur">
-            <h2 className="text-lg font-semibold mb-4 text-foreground">Price Distribution</h2>
-            <ChartContainer
-              config={{
-                count: { label: "Items", color: "hsl(var(--primary))" },
-              }}
-              className="h-80"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={priceDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ range, count }) => `${range}: ${count}`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="count"
-                  >
-                    {COLORS.map((color, index) => (
-                      <Cell key={`cell-${index}`} fill={color} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartContainer>
+          {/* Brand Distribution */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Top Brands</CardTitle>
+              <CardDescription>Product count by brand</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={{
+                  value: {
+                    label: "Products",
+                    color: "hsl(var(--chart-3))",
+                  },
+                }}
+                className="h-80"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={brandData} layout="vertical" margin={{ top: 5, right: 30, left: 200, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                    <XAxis type="number" stroke="var(--color-muted-foreground)" />
+                    <YAxis dataKey="name" type="category" width={190} stroke="var(--color-muted-foreground)" />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="value" fill="#4ECDC4" radius={[0, 8, 8, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
+          </Card>
+
+          {/* Color Distribution */}
+          <Card className="bg-card border-border">
+            <CardHeader>
+              <CardTitle>Color Distribution</CardTitle>
+              <CardDescription>Top product colors</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ChartContainer
+                config={{
+                  value: {
+                    label: "Products",
+                    color: "hsl(var(--chart-4))",
+                  },
+                }}
+                className="h-80"
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={colorData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={100}
+                      fill="var(--color-chart-4)"
+                      dataKey="value"
+                    >
+                      {colorData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </CardContent>
           </Card>
         </div>
 
-        {/* Inventory Table */}
-        <Card className="border-primary/10 bg-card/50 backdrop-blur">
-          <div className="p-6 border-b border-border">
-            <h2 className="text-lg font-semibold mb-4 text-foreground">Inventory</h2>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search items..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 bg-background/50"
-                />
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  variant={selectedCategory === null ? "default" : "outline"}
-                  onClick={() => setSelectedCategory(null)}
-                  size="sm"
-                >
-                  All
-                </Button>
-                {categories.map((category) => (
-                  <Button
-                    key={category}
-                    variant={selectedCategory === category ? "default" : "outline"}
-                    onClick={() => setSelectedCategory(category)}
-                    size="sm"
-                  >
-                    {category}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          </div>
+        {/* Data Table */}
+        <Card className="bg-card border-border mb-8">
+          <CardHeader>
+            <CardTitle>Product Data</CardTitle>
+            <CardDescription>First 10 products from dataset</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DataTable data={products} />
+          </CardContent>
+        </Card>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Product</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Category</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Price</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Stock</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Sales</th>
-                  <th className="px-6 py-3 text-left text-sm font-semibold text-foreground">Rating</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item) => (
-                  <tr key={item.id} className="border-b border-border hover:bg-primary/5 transition-colors">
-                    <td className="px-6 py-4 text-sm text-foreground font-medium">{item.name}</td>
-                    <td className="px-6 py-4 text-sm text-muted-foreground">
-                      <span className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">{item.category}</span>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-purple-400 dark:text-purple-300">
-                      ${item.price}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-foreground">
-                      <span
-                        className={`px-2 py-1 rounded text-xs font-medium ${
-                          item.stock > 20
-                            ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300"
-                            : item.stock > 10
-                              ? "bg-yellow-500/20 text-yellow-700 dark:text-yellow-300"
-                              : "bg-red-500/20 text-red-700 dark:text-red-300"
-                        }`}
-                      >
-                        {item.stock}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-cyan-400 dark:text-cyan-300">{item.sales}</td>
-                    <td className="px-6 py-4 text-sm text-orange-400 dark:text-orange-300 font-semibold">
-                      {item.rating}★
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {/* GitHub Link Section */}
+        <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Github size={24} />
+              Detailed Python Analytics
+            </CardTitle>
+            <CardDescription>
+              For more in-depth analysis and statistical insights, check out the Jupyter notebook on GitHub
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <a
+              href="https://github.com/Pranav07Duggal/Ikarus_3D/blob/main/notebooks/Ikarus_Data_Analysis.ipynb"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-opacity font-medium"
+            >
+              <Github size={20} />
+              View Jupyter Notebook on GitHub
+            </a>
+            <p className="text-sm text-muted-foreground mt-4">
+              The notebook includes advanced statistical analysis, machine learning models, and detailed visualizations
+              that go beyond this dashboard.
+            </p>
+          </CardContent>
         </Card>
       </div>
     </main>
