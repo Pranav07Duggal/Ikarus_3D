@@ -26,11 +26,12 @@ interface Product {
   description: string
   price: string
   category: string
-  style?: string
+  style: string
   image?: string
   color?: string
   material?: string
   brand?: string
+  
 }
 
 export default function RecommendationPage() {
@@ -57,15 +58,14 @@ export default function RecommendationPage() {
         const parsed = Papa.parse(csvText, { header: true })
         const data: Product[] = parsed.data.map((item: any, index: number) => ({
           id: item.uniq_id || index.toString(),
-          name: item.title,
-          description: item.description,
-          price: item.price,
-          category: item.categories,
-          image: parseImage(item.images),
-          color: item.color,
-          material: item.material,
-          brand: item.brand,
+          name: item.title || "Unknown",
+          description: item.description || "",
+          price: item.price || "0",
+          category: item.categories || "Unknown",
+          style: item.style || "Unknown",   // <-- ensure style exists
+          image: parseImage(item.images) || "background7.jpg",  // <-- ensure image exists
         }))
+
         setAllProducts(data)
       })
   }, [])
@@ -153,7 +153,7 @@ export default function RecommendationPage() {
                 {message.products && (
                   <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {message.products.map((product) => (
-                      <ProductCard key={product.id} product={product} />
+                      <ProductCard key={product.id} product={product as any} />
                     ))}
                   </div>
                 )}
